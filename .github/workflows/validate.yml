@@ -1,0 +1,79 @@
+name: Validate
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        python: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install test deps
+        run: python -m pip install --quiet "pytest>=8,<10"
+      - name: Contract tests
+        # The suite is offline by design: no brainstem, no network required.
+        run: python -m pytest tests/ -q
+
+  manifests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Every manifest is valid JSON and agrees on the version
+        run: |
+          python - <<'PY'
+          import json, pathlib, re, sys
+          root = pathlib.Path(".")
+          fm = (root / "skills/rapp/SKILL.md").read_text().split("---")[1]
+          version = re.search(r'^version:\s*"?([^"\n]+)"?', fm, re.M).group(1).strip()
+          bad = []
+          for rel in [".claude-plugin/plugin.json", ".claude-plugin/marketplace.json",
+                      ".codex-plugin/plugin.json", ".grok-plugin/plugin.json",
+                      ".grok-plugin/marketplace.json", ".agents/plugins/marketplace.json",
+                      "gemini-extension.json"]:
+              data = json.loads((root / rel).read_text())
+              found = data.get("version") or data.get("plugins", [{}])[0].get("version")
+              if found != version:
+                  bad.append(f"{rel}: {found} != SKILL.md {version}")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          print(f"All manifests agree on {version}")
+          PY
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No credential-shaped literals, no entitlement claims
+        run: |
+          python - <<'PY'
+          import pathlib, re, sys
+          bad = re.compile(r"(gh[pousr]_[A-Za-z0-9]{16,}|sk-[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16})")
+          banned = ["unlimited token", "infinite token", "free tokens"]
+          fails = []
+          for p in pathlib.Path("skills").rglob("*"):
+              if p.is_file() and p.suffix in {".py", ".md", ".json", ".sh"}:
+                  t = p.read_text(errors="replace")
+                  if bad.search(t):
+                      fails.append(f"{p}: credential-shaped literal")
+                  low = t.lower()
+                  for b in banned:
+                      if b in low:
+                          fails.append(f"{p}: entitlement claim {b!r}")
+          if fails:
+              print("\n".join(fails)); sys.exit(1)
+          print("clean")
+          PY

@@ -1,0 +1,35 @@
+{
+  "name": "rapp",
+  "version": "1.0.0",
+  "description": "Run the whole RAPP ecosystem end to end: install a local GitHub-Copilot-powered agent brainstem with no API keys, keep it healthy, install and test single-file agents from RAR and RAPPstore, and promote what works to Azure and Copilot Studio.",
+  "author": {
+    "name": "Kody Wildfeuer",
+    "url": "https://github.com/kody-w",
+    "email": "wildfeuer05@gmail.com"
+  },
+  "homepage": "https://github.com/kody-w/rapp-skill",
+  "repository": "https://github.com/kody-w/rapp-skill",
+  "license": "MIT",
+  "keywords": [
+    "rapp",
+    "brainstem",
+    "local-first",
+    "ai-agents",
+    "single-file-agent",
+    "github-copilot",
+    "copilot-studio",
+    "azure-functions",
+    "agent-registry",
+    "rappstore",
+    "on-device",
+    "m365",
+    "teams",
+    "agent-runtime"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "rapp",
+    "shortDescription": "Install, run, and extend your local RAPP brainstem.",
+    "invocation": "rapp doctor"
+  }
+}
