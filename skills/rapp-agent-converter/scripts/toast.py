@@ -44,6 +44,10 @@ CAPSULE_COMMENT_RE = re.compile(
 )
 GENERATED_BEGIN = "<!-- toaster:generated:begin -->"
 GENERATED_END = "<!-- toaster:generated:end -->"
+GENERATED_MARKER_RE = re.compile(
+    r"^<!-- toaster:generated:(?:begin|end) -->[ \t]*$",
+    re.M,
+)
 GENERATED_BLOCK_RE = re.compile(
     r"^<!-- toaster:generated:begin -->[ \t]*\n"
     r"(.*?)"
@@ -321,6 +325,34 @@ def _generated_markers_are_top_level(text: str) -> bool:
         if start != -1 and "-->" not in line[start + 4:]:
             in_html = True
     return True
+
+
+def _markdown_context_is_open(text: str) -> bool:
+    """Whether appending content would place it inside a fence/comment."""
+    in_fence = None
+    fence_len = 0
+    in_html = False
+    for line in text.splitlines():
+        if in_fence:
+            close = re.match(r"^ {0,3}([`~]{3,})[ \t]*$", line)
+            if close and close.group(1)[0] == in_fence \
+                    and len(close.group(1)) >= fence_len:
+                in_fence = None
+                fence_len = 0
+            continue
+        if in_html:
+            if "-->" in line:
+                in_html = False
+            continue
+        fence = re.match(r"^ {0,3}([`~]{3,})", line)
+        if fence:
+            in_fence = fence.group(1)[0]
+            fence_len = len(fence.group(1))
+            continue
+        start = line.find("<!--")
+        if start != -1 and "-->" not in line[start + 4:]:
+            in_html = True
+    return bool(in_fence or in_html)
 
 
 def _capsule_or_reparse(raw: bytes, filename: str, fmt: str):
@@ -658,7 +690,7 @@ def read_skill(raw: bytes, filename: str) -> dict:
         raise ValueError(f"{filename}: SKILL.md must be UTF-8") from exc
     got = _capsule_or_reparse(raw, filename, "skill")
     cap = got[1] if got and got[0] == "ok" else None
-    has_generated_markers = GENERATED_BEGIN in text or GENERATED_END in text
+    has_generated_markers = bool(GENERATED_MARKER_RE.search(text))
     if has_generated_markers and not _generated_markers_are_top_level(text):
         raise ValueError(
             "generated skill markers must be top-level Markdown blocks"
@@ -796,7 +828,9 @@ def write_skill(rci: dict) -> bytes:
         pairs.append(("metadata", metadata))
 
     body = (rci.get("instructions") or "").strip()
-    out = [emit_frontmatter(pairs), "\n", body, "\n"]
+    head = [emit_frontmatter(pairs), "\n"]
+    authored = [body, "\n"]
+    generated = []
 
     params = rci.get("parameters") or {}
     authored_params = PARAM_FENCE.search(body)
@@ -810,11 +844,12 @@ def write_skill(rci: dict) -> bytes:
                 "authored Parameters fence conflicts with the agent tool schema"
             )
     if params.get("properties") and not authored_params:
-        out += [f"\n{GENERATED_BEGIN}\n"
-                "\n## Parameters\n\nThe typed contract this capability answers to "
-                "(JSON Schema — the deterministic layer):\n\n```json\n",
-                json.dumps(params, indent=2, sort_keys=True),
-                f"\n```\n\n{GENERATED_END}\n"]
+        generated += [f"\n{GENERATED_BEGIN}\n"
+                      "\n## Parameters\n\nThe typed contract this capability "
+                      "answers to (JSON Schema — the deterministic layer):\n\n"
+                      "```json\n",
+                      json.dumps(params, indent=2, sort_keys=True),
+                      f"\n```\n\n{GENERATED_END}\n"]
 
     source = restore(rci, "agent")
     if source is not None:
@@ -824,13 +859,13 @@ def write_skill(rci: dict) -> bytes:
             raise ValueError(
                 "vaulted agent must be UTF-8 for an Agent Skill projection"
             ) from exc
-        if GENERATED_BEGIN in code or GENERATED_END in code:
+        if GENERATED_MARKER_RE.search(code):
             raise ValueError("agent source contains reserved generated-marker text")
         fence = _fence_for(code)
         fn = linked_agent_name(rci)
         cap_prev = rci.get("preserved", {}).get("agent", {}).get("sha256", "")[:16]
-        out += [f"\n{GENERATED_BEGIN}\n"
-                "\n## Run this — do not improvise\n\n"
+        generated += [f"\n{GENERATED_BEGIN}\n"
+                      "\n## Run this — do not improvise\n\n"
                 "This capability's deterministic implementation is a RAPP "
                 f"single-file agent, linked beside this file as `{fn}` and "
                 f"embedded as the fenced Python below (sha256 {cap_prev}…; a "
@@ -857,21 +892,30 @@ def write_skill(rci: dict) -> bytes:
                 "\n\n"
                 f"{fence}python  # rapp:deterministic\n{code}"
                 + ("" if code.endswith("\n") else "\n")
-                + f"{fence}\n\n{GENERATED_END}\n"]
+                      + f"{fence}\n\n{GENERATED_END}\n"]
     elif (rci.get("impl") or {}).get("perform_body"):
         code = rci["impl"]["perform_body"]
         fence = _fence_for(code)
-        out += [f"\n{GENERATED_BEGIN}\n"
-                "\n## Deterministic implementation\n\nRun this instead of "
-                "improvising when the inputs are well-formed:\n\n"
-                f"{fence}python  # rapp:deterministic\n{code.strip()}\n{fence}\n"
-                f"\n{GENERATED_END}\n"]
+        generated += [f"\n{GENERATED_BEGIN}\n"
+                      "\n## Deterministic implementation\n\nRun this instead "
+                      "of improvising when the inputs are well-formed:\n\n"
+                      f"{fence}python  # rapp:deterministic\n"
+                      f"{code.strip()}\n{fence}\n"
+                      f"\n{GENERATED_END}\n"]
 
+    tail = []
     if rci.get("examples"):
-        out.append("\n## Examples\n\n")
+        tail.append("\n## Examples\n\n")
         for ex in rci["examples"]:
-            out.append(f"- **in:** {ex.get('input', '')}\n  **out:** {ex.get('output', '')}\n")
+            tail.append(
+                f"- **in:** {ex.get('input', '')}\n"
+                f"  **out:** {ex.get('output', '')}\n"
+            )
 
+    if generated and _markdown_context_is_open(body):
+        out = head + generated + ["\n"] + authored + tail
+    else:
+        out = head + authored + generated + tail
     out.append(f"\n<!-- {pack_capsule(rci)} -->\n")
     return "".join(out).encode()
 
@@ -1440,7 +1484,8 @@ def cmd_selftest(_a) -> int:
         raw_path = os.path.join(td, "RAW.md")
         with open(raw_path, "w") as f:
             f.write("---\nname: raw-bread\ndescription: no capsule here\n---\n\n"
-                    "Documents `rci-capsule:v1:` as syntax.\n\n"
+                    "Documents `rci-capsule:v1:` and "
+                    "`<!-- toaster:generated:begin -->` as syntax.\n\n"
                     "```python\nprint('documentation only')\n```\n")
         if cmd_roundtrip(argparse.Namespace(path=raw_path, cycles=1,
                                             allow_raw=False)) != 2:
@@ -1450,6 +1495,26 @@ def cmd_selftest(_a) -> int:
             failures.append("raw capability fixed point was not verified")
         if (load(raw_path, "skill").get("impl") or {}).get("perform_body"):
             failures.append("ordinary Python example became executable behavior")
+
+        unclosed_path = os.path.join(td, "UNCLOSED.md")
+        with open(unclosed_path, "w") as f:
+            f.write(
+                "---\nname: unclosed\ndescription: open fence\n---\n\n"
+                "```markdown\nAn authored example that never closes.\n"
+            )
+        unclosed_agent = write_agent(load(unclosed_path, "skill"))
+        unclosed_skill = write_skill(
+            read_agent(unclosed_agent, "unclosed_agent.py")
+        )
+        unclosed_text = unclosed_skill.decode()
+        if unclosed_text.find(GENERATED_BEGIN) > unclosed_text.find("```markdown"):
+            failures.append("generated block was hidden by an authored open fence")
+        unclosed_skill_path = os.path.join(td, "UNCLOSED_PROJECTED.md")
+        with open(unclosed_skill_path, "wb") as f:
+            f.write(unclosed_skill)
+        if cmd_roundtrip(argparse.Namespace(path=unclosed_skill_path, cycles=1,
+                                            allow_raw=False)) != 0:
+            failures.append("open-fence skill projection did not verify")
 
         numeric_path = os.path.join(td, "NUMERIC.md")
         with open(numeric_path, "w") as f:
