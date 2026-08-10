@@ -28,6 +28,21 @@ jobs:
         # The suite is offline by design: no brainstem, no network required.
         run: python -m pytest tests/ -q
 
+      - name: Converter emits and restores the linked pair
+        shell: bash
+        run: |
+          set -euo pipefail
+          converter=skills/rapp-agent-converter/scripts/toast.py
+          sample=skills/rapp-agent-converter/assets/hello_rapp_agent.py
+          mkdir -p "$RUNNER_TEMP/pair"
+          python "$converter" convert "$sample" --to skill \
+            -o "$RUNNER_TEMP/pair/SKILL.md"
+          python -c "from pathlib import Path; assert Path('$sample').read_bytes() == Path(r'$RUNNER_TEMP/pair/hello_rapp_agent.py').read_bytes()"
+          rm "$RUNNER_TEMP/pair/hello_rapp_agent.py"
+          python "$converter" convert "$RUNNER_TEMP/pair/SKILL.md" --to agent \
+            -o "$RUNNER_TEMP/restored.py"
+          python -c "from pathlib import Path; assert Path('$sample').read_bytes() == Path(r'$RUNNER_TEMP/restored.py').read_bytes()"
+
   manifests:
     runs-on: ubuntu-latest
     steps:

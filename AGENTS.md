@@ -11,6 +11,8 @@ This repo calls them.
 - Install runs the canonical one-liner from the install page. Do not fork it.
 - Catalogs are read from their published JSON. Do not vendor a copy.
 - Agent loading uses the brainstem's own loader. Do not write a second one.
+- Agent Skill conversion uses `skills/rapp-agent-converter/` verbatim. Do not add
+  capsule, projection, or restore logic to `rapp.py`.
 
 Two tests enforce this (`test_install_uses_the_canonical_one_liner`,
 `test_catalogs_are_the_public_ones`). If a change makes them fail, the change is
@@ -46,10 +48,12 @@ Installs verify SHA-256 against the catalog. A mismatch aborts. Do not add a
 | `skills/rapp/SKILL.md` | The contract the model reads. Behavior changes start here. |
 | `skills/rapp/scripts/rapp.py` | The engine. One file, stdlib only, no dependencies. |
 | `skills/rapp/references/` | Loaded on demand, not on every run. |
+| `skills/rapp-agent-converter/SKILL.md` | The converter contract, vendored as a complete sibling skill. |
+| `skills/rapp-agent-converter/scripts/toast.py` | The only Agent Skill conversion engine in this repository. |
 | `tests/` | Offline contract tests. |
 
-Keep the engine dependency-free. It has to run on a machine that has just been handed
-the skill and nothing else.
+Keep both engines dependency-free. They have to run on a machine that has just been
+handed the package and nothing else.
 
 ## Adding a command
 

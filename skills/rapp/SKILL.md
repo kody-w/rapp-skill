@@ -1,7 +1,7 @@
 ---
 name: rapp
-version: "1.0.0"
-description: "Run the whole RAPP ecosystem end to end. Installs the local brainstem (a GitHub-Copilot-powered agent server that needs no API keys), keeps it healthy with a doctor, installs and tests single-file agents from RAR and RAPPstore, talks to it over /chat, and promotes what works to Azure and Copilot Studio."
+version: "1.1.0"
+description: "Run the whole RAPP ecosystem end to end. Installs the local brainstem (a GitHub-Copilot-powered agent server that needs no API keys), keeps it healthy with a doctor, installs and tests single-file agents from RAR and RAPPstore, converts RAPP agent.py cartridges into Agent Skills and back through the bundled rapp-agent-converter skill, talks to the brainstem over /chat, and promotes what works to Azure and Copilot Studio."
 argument-hint: 'rapp doctor | rapp install | rapp search memory | rapp chat "what can you do?"'
 allowed-tools: Bash, Read, Write, AskUserQuestion
 homepage: https://github.com/kody-w/rapp-skill
@@ -53,19 +53,21 @@ would browse. If you find yourself writing an install script, a registry parser,
 agent loader from scratch, stop — the engine already does it, and the ecosystem owns
 the source of truth.
 
-**Everything routes through one engine.** Do not improvise `curl` calls against the
-brainstem, hand-write multipart uploads, or shell into `~/.brainstem` to move files.
-Every operation below is a subcommand of `scripts/rapp.py`, and each one already
-handles SHA-256 verification, hot-loading, sandboxing, and honest error reporting.
+**Each surface has one engine.** Runtime and ecosystem operations route through
+`scripts/rapp.py`. Agent Skill conversion routes through the sibling
+`rapp-agent-converter` skill and its `scripts/toast.py`. Do not implement conversion
+inside `rapp.py`, improvise `curl` calls against the brainstem, hand-write multipart
+uploads, or shell into `~/.brainstem` to move files.
 
 ```bash
-SKILL_DIR="$(dirname "$(readlink -f "$0" 2>/dev/null || echo "$0")")"   # or the dir of the SKILL.md you just read
+SKILL_DIR="/absolute/path/to/the/skills/rapp directory"
 python3 "$SKILL_DIR/scripts/rapp.py" <command>
 ```
 
-Substitute `SKILL_DIR` with the directory of the SKILL.md you just read. Whichever
-install the harness loaded this file from is the install whose engine runs — no path
-discovery loop, no precedence walk.
+Resolve `SKILL_DIR` from the actual path of the `SKILL.md` the host loaded, using
+the host's workspace/file tools. **Do not derive it from shell `$0`** — that names
+the shell, not this skill. Whichever install supplied this file is the install whose
+engine runs; do not search for another copy.
 
 ---
 
@@ -132,11 +134,15 @@ what it says. The engine knows the current state; you do not.
 | To see what is loaded | `agents list` |
 | To actually use it | `chat "…"` |
 | To know whether an agent works | `test <file-or-@publisher/slug>` |
+| Convert `agent.py` into an Agent Skill | Use sibling `rapp-agent-converter`: `convert <agent.py> --to skill` |
+| Convert `SKILL.md` into `agent.py` | Use sibling `rapp-agent-converter`: `convert <SKILL.md> --to agent` |
 | To understand the ecosystem | `map` |
 | To know where a build stands | `tiers` |
 | "Where does the AI's memory live?" | `memory` |
 
-Add `--json` to any command when you need to parse rather than relay.
+Add `--json` to any `scripts/rapp.py` command when you need to parse rather
+than relay. The sibling converter has its own CLI and does not accept this
+flag.
 
 ---
 
@@ -227,6 +233,25 @@ third-party code. Reports load failures, exceptions, and contract violations
 Reading an agent's source is not testing it. Run this before telling a user an agent
 works.
 
+### Agent Skill conversion — use the sibling skill
+
+This package ships `skills/rapp-agent-converter/` beside this skill. It is the exact
+converter submitted to the CAT Agent Skills gallery and is the only conversion
+implementation in this repository.
+
+```bash
+python3 "$SKILL_DIR/../rapp-agent-converter/scripts/toast.py" \
+  convert path/to/foo_agent.py --to skill -o out/SKILL.md
+python3 "$SKILL_DIR/../rapp-agent-converter/scripts/toast.py" \
+  convert out/SKILL.md --to agent
+python3 "$SKILL_DIR/../rapp-agent-converter/scripts/toast.py" \
+  roundtrip path/to/foo_agent.py
+```
+
+The skill projection is a pair: `SKILL.md` plus a byte-exact linked agent file.
+Never hand-transform either direction and never add conversion code to `rapp.py`.
+Follow the sibling skill's `SKILL.md` for restoration, drift, and host-tier rules.
+
 ### memory — the filesystem answer
 
 ```bash
@@ -261,6 +286,10 @@ and GitHub, and this skill makes no claim about it.
 
 **Integrity is not optional.** Agent installs are SHA-256 verified against the catalog.
 A mismatch is a stop, not a warning to route around.
+
+**Conversion has one authority.** The sibling `rapp-agent-converter` skill is vendored
+as a complete skill. Do not reproduce its parser, capsule, linked-pair, or restoration
+logic in this skill's engine.
 
 **Ask before installing to a machine.** `install` runs a remote script. Unless the user
 has clearly asked to install, show them `--dry-run` output first and let them agree.

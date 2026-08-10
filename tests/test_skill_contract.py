@@ -16,6 +16,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 SKILL = ROOT / "skills" / "rapp"
 ENGINE = SKILL / "scripts" / "rapp.py"
+CONVERTER = ROOT / "skills" / "rapp-agent-converter"
+CONVERTER_ENGINE = CONVERTER / "scripts" / "toast.py"
 
 sys.path.insert(0, str(SKILL / "scripts"))
 import rapp  # noqa: E402
@@ -34,6 +36,62 @@ def test_help_exits_zero():
                        capture_output=True, text=True, timeout=60)
     assert p.returncode == 0
     assert "doctor" in p.stdout
+
+
+def test_converter_is_a_complete_sibling_skill():
+    for rel in (
+        "SKILL.md",
+        "scripts/toast.py",
+        "references/rapp-agent-contract.md",
+        "references/rapp1-protocol.md",
+        "assets/hello_rapp_agent.py",
+    ):
+        assert (CONVERTER / rel).is_file(), rel
+
+
+def test_converter_selftest_passes():
+    p = subprocess.run(
+        [sys.executable, str(CONVERTER_ENGINE), "selftest"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "SELFTEST PASS" in p.stdout
+
+
+def test_converter_sample_roundtrips_byte_identical():
+    sample = CONVERTER / "assets" / "hello_rapp_agent.py"
+    p = subprocess.run(
+        [sys.executable, str(CONVERTER_ENGINE), "roundtrip", str(sample)],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert "IDENTICAL" in p.stdout
+
+
+def test_documented_converter_path_works_from_arbitrary_cwd(tmp_path):
+    p = subprocess.run(
+        [sys.executable, str(CONVERTER_ENGINE), "inspect",
+         str(CONVERTER / "assets" / "hello_rapp_agent.py")],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert p.returncode == 0, p.stdout + p.stderr
+    assert json.loads(p.stdout)["format"] == "agent"
+
+
+def test_rapp_skill_routes_conversion_to_sibling_engine():
+    text = (SKILL / "SKILL.md").read_text()
+    assert "rapp-agent-converter/scripts/toast.py" in text
+    assert "Do not implement conversion" in text
+    assert "inside `rapp.py`" in text
+    assert "Do not derive it from shell `$0`" in text
+    assert "converter has its own CLI and does not accept this" in text
 
 
 @pytest.mark.parametrize("cmd", ["doctor", "install", "up", "down", "status", "search",
@@ -170,6 +228,12 @@ def test_skill_md_has_required_frontmatter():
     fm = (SKILL / "SKILL.md").read_text().split("---")[1]
     for key in ("name:", "version:", "description:", "license:"):
         assert key in fm
+
+
+def test_converter_skill_has_canonical_frontmatter():
+    fm = (CONVERTER / "SKILL.md").read_text().split("---")[1]
+    assert "name: rapp-agent-converter" in fm
+    assert "description:" in fm
 
 
 def test_referenced_reference_files_exist():

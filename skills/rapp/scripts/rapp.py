@@ -41,7 +41,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 
 HOME = Path.home()
 BRAINSTEM_HOME = Path(os.environ.get("RAPP_HOME", HOME / ".brainstem"))

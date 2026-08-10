@@ -1,11 +1,19 @@
 # rapp-skill
 
-**Hand this skill to Claude Code, GitHub Copilot CLI, Codex, or any agent harness, and
-it can run your whole RAPP ecosystem end to end.**
+**Hand this package to Claude Code, GitHub Copilot CLI, Codex, or any agent harness,
+and it can run your whole RAPP ecosystem and move capabilities between RAPP agents
+and Agent Skills without a rewrite.**
 
 Install a local agent brainstem with no API keys, keep it healthy, install and test
 single-file agents from two public catalogs, talk to it, and promote what works to
 Azure and Copilot Studio.
+
+The package contains two discoverable skills:
+
+| Skill | Engine | Purpose |
+|---|---|---|
+| `rapp` | `skills/rapp/scripts/rapp.py` | Install, operate, test, and promote the RAPP ecosystem. |
+| `rapp-agent-converter` | `skills/rapp-agent-converter/scripts/toast.py` | Convert `agent.py` ↔ Agent Skill with a byte-exact linked-agent pair. |
 
 ```bash
 python3 skills/rapp/scripts/rapp.py doctor
@@ -44,10 +52,10 @@ git clone https://github.com/kody-w/rapp-skill ~/.agents/skills/rapp-skill
 Then just ask: *"install my brainstem"*, *"is my brainstem healthy?"*, *"find me an
 agent that tracks projects"*, *"test this agent"*.
 
-## Commands
+## RAPP runtime commands
 
-Everything routes through one engine, so an AI never has to hand-write a `curl` call
-against the brainstem or a multipart upload.
+Runtime operations route through `skills/rapp/scripts/rapp.py`, so an AI never
+has to hand-write a `curl` call against the brainstem or a multipart upload.
 
 | Command | What it does |
 |---------|--------------|
@@ -63,7 +71,23 @@ against the brainstem or a multipart upload.
 | `tiers` | Where this machine stands across all three tiers. |
 | `memory` | Inspect and back up what the brainstem remembers. |
 
-Add `--json` to any command for structured output.
+Add `--json` to any `rapp.py` command for structured output.
+
+## Agent Skill conversion commands
+
+Conversion is a separate CLI owned by the sibling skill:
+
+```bash
+python3 skills/rapp-agent-converter/scripts/toast.py \
+  convert path/to/foo_agent.py --to skill -o out/SKILL.md
+python3 skills/rapp-agent-converter/scripts/toast.py \
+  convert out/SKILL.md --to agent
+python3 skills/rapp-agent-converter/scripts/toast.py \
+  roundtrip path/to/foo_agent.py
+```
+
+`toast.py` does not accept `--json`. Its stdout is already a stable
+human-readable verdict and `inspect` emits JSON.
 
 ## Zero to a working agent
 
@@ -92,7 +116,8 @@ Tiers 2 and 3 use your own Azure and Microsoft 365 subscriptions and need the `a
 ## Design rules
 
 - **Reimplements nothing.** The installer, the catalogs, and the brainstem are upstream.
-  This skill is the seam between them.
+  The submitted `rapp-agent-converter` skill owns conversion. This package is the seam
+  between them; `rapp.py` does not grow a second converter.
 - **Integrity is not optional.** Every install is SHA-256 verified against the catalog.
   A mismatch stops the install.
 - **Third-party code is sandboxed.** `test` runs agents in a subprocess, in a throwaway
@@ -109,6 +134,11 @@ skills/rapp/
   SKILL.md               the contract an AI reads
   scripts/rapp.py        the engine — every command
   references/            tiers, agent contract, troubleshooting
+skills/rapp-agent-converter/
+  SKILL.md               conversion operating procedure
+  scripts/toast.py       byte-exact agent.py ↔ Agent Skill engine
+  references/            RAPP contract + rapp/1 wire
+  assets/                executable sample cartridge
 tests/                   offline contract tests
 .claude-plugin/          Claude Code plugin + marketplace
 .codex-plugin/           Codex plugin
@@ -125,6 +155,8 @@ python -m pytest tests/ -q
 
 The suite is offline by design: no brainstem and no network required, so CI stays
 honest on a machine with neither.
+
+The converter's own selftest and sample roundtrip run in the same suite.
 
 ## The ecosystem
 

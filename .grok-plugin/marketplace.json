@@ -5,13 +5,13 @@
     "url": "https://github.com/kody-w"
   },
   "metadata": {
-    "description": "Marketplace hosting the RAPP ecosystem skill."
+    "description": "Marketplace hosting the RAPP ecosystem and agent-converter skills."
   },
   "plugins": [
     {
       "name": "rapp",
-      "description": "Run the whole RAPP ecosystem end to end: install a local GitHub-Copilot-powered agent brainstem with no API keys, keep it healthy, install and test single-file agents from RAR and RAPPstore, and promote what works to Azure and Copilot Studio.",
-      "version": "1.0.0",
+      "description": "Run the RAPP ecosystem and convert RAPP agents into Agent Skills and back.",
+      "version": "1.1.0",
       "author": {
         "name": "Kody Wildfeuer",
         "url": "https://github.com/kody-w"

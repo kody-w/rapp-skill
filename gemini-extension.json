@@ -1,7 +1,7 @@
 {
   "name": "rapp",
-  "version": "1.0.0",
-  "description": "Run the whole RAPP ecosystem end to end: install a local GitHub-Copilot-powered agent brainstem with no API keys, keep it healthy, install and test single-file agents from RAR and RAPPstore, and promote what works to Azure and Copilot Studio.",
+  "version": "1.1.0",
+  "description": "Run the RAPP ecosystem end to end and convert RAPP single-file agents into Agent Skills and back with the bundled byte-exact converter.",
   "homepage": "https://github.com/kody-w/rapp-skill",
   "repository": {
     "type": "git",
@@ -22,7 +22,9 @@
     "on-device",
     "m365",
     "teams",
-    "agent-runtime"
+    "agent-runtime",
+    "agent-skills",
+    "conversion"
   ],
   "contextFileName": "skills/rapp/SKILL.md"
 }
