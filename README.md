@@ -1,5 +1,9 @@
 # rapp-skill
 
+<!-- rapp1:network-header:start -->
+[![RAPP/1](https://kody-w.github.io/rapp-hive-public/portfolio/badges/rapp-skill.svg)](https://github.com/kody-w/rapp-hive-public/blob/main/portfolio/repos/rapp-skill.md) · **New to RAPP?** [Start here: get your Brainstem →](https://github.com/kody-w/rapp-installer#start-here)
+<!-- rapp1:network-header:end -->
+
 **Hand this package to Claude Code, GitHub Copilot CLI, Codex, or any agent harness,
 and it can run your whole RAPP ecosystem and move capabilities between RAPP agents
 and Agent Skills without a rewrite.**
