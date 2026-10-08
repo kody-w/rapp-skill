@@ -1,3 +1,7 @@
+<!-- retired-notice:start -->
+> **Retired experiment, kept for reference.** The living project is [kody-w/RAR](https://github.com/kody-w/RAR).
+<!-- retired-notice:end -->
+
 # rapp-skill
 
 <!-- rapp1:network-header:start -->
